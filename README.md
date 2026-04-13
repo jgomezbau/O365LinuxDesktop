@@ -163,8 +163,7 @@ Los artefactos se escriben en `dist/`.
 O365LinuxDesktop/
 ├── main.js
 ├── package.json
-├── build/
-│   └── icons/
+├── icons/
 ├── src/
 │   ├── assets/
 │   │   └── icons/
