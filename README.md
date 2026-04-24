@@ -2,6 +2,8 @@
 
 Aplicación de escritorio basada en Electron para trabajar con Microsoft 365 desde Linux con una interfaz de pestañas propia, integración con bandeja del sistema y soporte para abrir documentos y aplicaciones de Microsoft 365 sin depender de un navegador tradicional.
 
+Versión actual: `2.7.0`
+
 ## Resumen
 
 O365 Linux Desktop abre Microsoft 365 dentro de una ventana nativa con una barra de pestañas personalizada. La aplicación está orientada principalmente a Linux y en la configuración actual de desarrollo usa X11 por defecto, con una opción explícita para probar Wayland.
@@ -12,6 +14,7 @@ El proyecto incluye:
 - desacople de pestañas a ventanas separadas
 - menú de bandeja con accesos rápidos y favoritos
 - modales flotantes para configuración, lanzador de aplicaciones y tarjeta contextual de pestaña
+- arquitectura modular inicial con bootstrap limpio, servicios separados y worker para integración nativa Linux
 
 ## Funcionalidades actuales
 
@@ -49,7 +52,7 @@ El proyecto incluye:
   - submenú `Aplicaciones`
   - salir
 - Los favoritos del tray se agrupan por tipo usando iconos y separadores entre grupos no vacíos.
-- El submenú `Aplicaciones` abre accesos directos a:
+- El submenú `Aplicaciones` muestra el icono de cada aplicación y abre accesos directos a:
   - Word
   - Excel
   - PowerPoint
@@ -90,8 +93,16 @@ El proyecto incluye:
 ### Menú contextual y apertura con aplicaciones nativas
 - Menú contextual personalizado dentro de las vistas web.
 - Para enlaces a documentos compatibles, el menú contextual puede ofrecer apertura con aplicaciones nativas detectadas en Linux.
+- La detección de aplicaciones, descargas y apertura externa se encapsulan detrás de `nativeAppService` y un worker dedicado basado en `worker_threads`.
 - Para imágenes se ofrecen acciones como copiar y guardar.
 - En desarrollo, también se expone inspección de elementos desde el menú contextual.
+
+### Arquitectura y mantenibilidad
+- `main.js` es un bootstrap mínimo que carga `src/main/index.js`.
+- Las constantes, rutas, logging, navegación, favoritos, tray, IPC, persistencia de pestañas, integración nativa, ventanas auxiliares y workers viven en módulos dedicados bajo `src/main/`.
+- El documento [src/ARCHITECTURE.md](src/ARCHITECTURE.md) describe la estructura modular, responsabilidades y el contrato del worker.
+- El proyecto mantiene CommonJS para alinearse con el código existente y reducir riesgo durante la migración.
+- La carpeta heredada `src/utils/` se eliminó: las reglas de URL viven en `src/main/navigation/` y la integración nativa vive en `src/main/native/` + `src/main/workers/`.
 
 ## Plataforma objetivo
 
@@ -165,11 +176,23 @@ O365LinuxDesktop/
 ├── package.json
 ├── icons/
 ├── src/
+│   ├── ARCHITECTURE.md
 │   ├── assets/
 │   │   └── icons/
 │   ├── config/
 │   │   └── configManager.js
 │   ├── main/
+│   │   ├── app/
+│   │   ├── favorites/
+│   │   ├── ipc/
+│   │   ├── logging/
+│   │   ├── native/
+│   │   ├── navigation/
+│   │   ├── tabs/
+│   │   ├── tray/
+│   │   ├── windows/
+│   │   ├── workers/
+│   │   ├── index.js
 │   │   ├── appSession.js
 │   │   ├── floatingModal.js
 │   │   └── windowState.js
@@ -186,9 +209,6 @@ O365LinuxDesktop/
 │   │   │   └── modal.js
 │   │   └── shared/
 │   │       └── styles.css
-│   └── utils/
-│       ├── nativeAppHandler.js
-│       └── urlHandler.js
 └── dist/
 ```
 
@@ -208,6 +228,7 @@ La aplicación almacena configuración y estado mediante `electron-store`, inclu
 - La restauración de pestañas depende de URLs restaurables; si un documento ya no está disponible, la aplicación lo omite en sesiones posteriores.
 - La información mostrada en la tarjeta de pestaña se infiere desde título, URL y metadatos disponibles; no todas las fuentes exponen la misma calidad de datos.
 - La detección de aplicaciones nativas para “Abrir con…” está orientada a Linux.
+- La migración modular es incremental: el siguiente bloque grande pendiente es extraer `tabManager`, creación de `WebContentsView` y navegación por pestaña desde `src/main/index.js`.
 
 ## Licencia
 
