@@ -40,6 +40,9 @@ const debugPrimaryFlow = DEBUG_PRIMARY_FLOW;
 let mainWindow;
 let tray = null; // Variable para mantener la referencia al Tray
 let activeMainContentView = null;
+const TAB_BAR_HEIGHT = 32;
+const DETACHED_TAB_REATTACH_HOTZONE_HEIGHT = 52;
+const DETACHED_TAB_REATTACH_DELAY_MS = 180;
 
 const mainWindowState = createMainWindowStateManager({
   configManager,
@@ -357,6 +360,189 @@ function detachTabViewFromMainWindow(view) {
   }
 }
 
+function attachTabViewToDetachedWindow(tab, detachedWindow) {
+  if (!tab || !tab.view || !detachedWindow || detachedWindow.isDestroyed()) return;
+
+  detachTabViewFromMainWindow(tab.view);
+  detachedWindow.contentView.addChildView(tab.view);
+  tab.view.__attachedToDetachedWindow = true;
+  tab.detachedWindow = detachedWindow;
+  updateDetachedTabBounds(tab);
+}
+
+function detachTabViewFromDetachedWindow(tab) {
+  if (!tab || !tab.view || !tab.detachedWindow || tab.detachedWindow.isDestroyed()) return;
+  if (!tab.view.__attachedToDetachedWindow) return;
+
+  tab.detachedWindow.contentView.removeChildView(tab.view);
+  tab.view.__attachedToDetachedWindow = false;
+}
+
+function updateDetachedTabBounds(tab) {
+  if (!tab || !tab.view || !tab.detachedWindow || tab.detachedWindow.isDestroyed()) return;
+
+  const bounds = tab.detachedWindow.getContentBounds();
+  tab.view.setBounds({
+    x: 0,
+    y: 0,
+    width: bounds.width,
+    height: bounds.height
+  });
+}
+
+function getFallbackActiveTabId(excludeTabId = null) {
+  if (!tabManager.tabs.length) return null;
+
+  const excludedId = excludeTabId == null ? null : Number(excludeTabId);
+  const excludedIndex = tabManager.tabs.findIndex((tab) => tab.id === excludedId);
+  const attachedTabs = tabManager.tabs.filter((tab) => !tab.isDetached && tab.id !== excludedId);
+
+  if (!attachedTabs.length) return null;
+  if (excludedIndex === -1) return attachedTabs[0].id;
+
+  for (let index = excludedIndex - 1; index >= 0; index -= 1) {
+    const candidate = tabManager.tabs[index];
+    if (candidate && !candidate.isDetached && candidate.id !== excludedId) {
+      return candidate.id;
+    }
+  }
+
+  for (let index = excludedIndex + 1; index < tabManager.tabs.length; index += 1) {
+    const candidate = tabManager.tabs[index];
+    if (candidate && !candidate.isDetached && candidate.id !== excludedId) {
+      return candidate.id;
+    }
+  }
+
+  return attachedTabs[0].id;
+}
+
+function isDetachedWindowInMainTabHotzone(detachedWindow) {
+  if (
+    !mainWindow ||
+    !detachedWindow ||
+    mainWindow.isDestroyed() ||
+    detachedWindow.isDestroyed() ||
+    !mainWindow.isVisible()
+  ) {
+    return false;
+  }
+
+  const detachedBounds = detachedWindow.getBounds();
+  const mainBounds = mainWindow.getBounds();
+  const probePoint = {
+    x: detachedBounds.x + Math.min(140, Math.max(24, Math.floor(detachedBounds.width / 2))),
+    y: detachedBounds.y + 12
+  };
+
+  return (
+    probePoint.x >= mainBounds.x &&
+    probePoint.x <= mainBounds.x + mainBounds.width &&
+    probePoint.y >= mainBounds.y &&
+    probePoint.y <= mainBounds.y + DETACHED_TAB_REATTACH_HOTZONE_HEIGHT
+  );
+}
+
+function closeDetachedTabWindow(tab) {
+  if (!tab || !tab.detachedWindow) return;
+
+  const detachedWindow = tab.detachedWindow;
+  tab.__closingDetachedTab = true;
+  if (tab.__reattachTimer) {
+    clearTimeout(tab.__reattachTimer);
+    tab.__reattachTimer = null;
+  }
+  detachTabViewFromDetachedWindow(tab);
+  tab.detachedWindow = null;
+
+  if (!detachedWindow.isDestroyed()) {
+    detachedWindow.__closingDetachedTab = true;
+    detachedWindow.close();
+  }
+  tab.__closingDetachedTab = false;
+}
+
+function cancelPendingDetachedTabReattach(tab) {
+  if (!tab || !tab.__reattachTimer) return;
+
+  clearTimeout(tab.__reattachTimer);
+  tab.__reattachTimer = null;
+}
+
+function scheduleDetachedTabReattach(tab, detachedWindow) {
+  if (!tab || !detachedWindow || detachedWindow.isDestroyed()) return;
+  if (tab.__reattaching || tab.__closingDetachedTab || tab.__reattachTimer) return;
+
+  tab.__reattachTimer = setTimeout(() => {
+    tab.__reattachTimer = null;
+
+    if (
+      tab.__reattaching ||
+      tab.__closingDetachedTab ||
+      !tab.isDetached ||
+      tab.detachedWindow !== detachedWindow ||
+      detachedWindow.isDestroyed() ||
+      !isDetachedWindowInMainTabHotzone(detachedWindow)
+    ) {
+      return;
+    }
+
+    reattachDetachedTab(tab.id);
+  }, DETACHED_TAB_REATTACH_DELAY_MS);
+}
+
+function createDetachedTabWindow(tab) {
+  if (!tab || !tab.view) return null;
+
+  const currentBounds = mainWindow && !mainWindow.isDestroyed()
+    ? mainWindow.getBounds()
+    : { x: 80, y: 80, width: 1180, height: 820 };
+  const title = tab.fullTitle || tab.title || 'Ventana separada';
+  const detachedWindow = new BrowserWindow({
+    x: currentBounds.x + 72,
+    y: currentBounds.y + 72,
+    width: Math.max(900, Math.min(currentBounds.width, 1180)),
+    height: Math.max(640, Math.min(currentBounds.height, 820)),
+    minWidth: 900,
+    minHeight: 640,
+    show: true,
+    autoHideMenuBar: true,
+    backgroundColor: '#FFFFFF',
+    icon: appPaths.appIcon,
+    title
+  });
+
+  detachedWindow.setMenuBarVisibility(false);
+  attachTabViewToDetachedWindow(tab, detachedWindow);
+
+  detachedWindow.on('resize', () => {
+    updateDetachedTabBounds(tab);
+  });
+
+  detachedWindow.on('move', () => {
+    if (tab.__reattaching || tab.__closingDetachedTab) return;
+    if (isDetachedWindowInMainTabHotzone(detachedWindow)) {
+      scheduleDetachedTabReattach(tab, detachedWindow);
+    } else {
+      cancelPendingDetachedTabReattach(tab);
+    }
+  });
+
+  detachedWindow.on('close', (event) => {
+    if (tab.__reattaching || detachedWindow.__closingDetachedTab) return;
+    event.preventDefault();
+    closeTab(tab.id);
+  });
+
+  detachedWindow.once('closed', () => {
+    if (tab.detachedWindow === detachedWindow) {
+      tab.detachedWindow = null;
+    }
+  });
+
+  return detachedWindow;
+}
+
 // Función auxiliar para crear una WebContentsView
 function createWebContentsView(options = {}) {
   const userAgent = getEffectiveUserAgent();
@@ -615,12 +801,11 @@ function updateActiveTabBounds() {
     let activeTab = tabManager.tabs.find(tab => tab.id === tabManager.activeTabId);
     if (activeTab) {
       let bounds = mainWindow.getContentBounds();
-      const tabBarHeight = 32; // Altura de la barra de pestañas (32px)
       activeTab.view.setBounds({
         x: 0,
-        y: tabBarHeight,
+        y: TAB_BAR_HEIGHT,
         width: bounds.width,
-        height: bounds.height - tabBarHeight,
+        height: bounds.height - TAB_BAR_HEIGHT,
       });
     }
   }
@@ -648,12 +833,11 @@ function createTab(urlOrConfig, makeActive = false) {
   const view = createWebContentsView({ partition, appId, isPrimary });
 
   let bounds = mainWindow.getContentBounds();
-  const tabBarHeight = 32; // Altura de la barra de pesta\u00f1as (32px)
   view.setBounds({
     x: 0,
-    y: tabBarHeight,
+    y: TAB_BAR_HEIGHT,
     width: bounds.width,
-    height: bounds.height - tabBarHeight,
+    height: bounds.height - TAB_BAR_HEIGHT,
   });
   
   // Asignar ID de pestaña primero
@@ -669,7 +853,9 @@ function createTab(urlOrConfig, makeActive = false) {
     fullTitle: url,
     partition,
     appId,
-    isPrimary
+    isPrimary,
+    isDetached: false,
+    detachedWindow: null
   };
   
   // Añadir a la lista de pestañas
@@ -781,6 +967,9 @@ function createTab(urlOrConfig, makeActive = false) {
     tab.fullTitle = title;
     let shortTitle = title.split(' - ')[0];
     tab.title = shortTitle;
+    if (tab.detachedWindow && !tab.detachedWindow.isDestroyed()) {
+      tab.detachedWindow.setTitle(tab.fullTitle || tab.title || 'Ventana separada');
+    }
     updateFavoriteEntryForTab(tab);
     sendTabsUpdate();
   });
@@ -825,6 +1014,11 @@ function switchTab(tabId) {
   tabManager.activeTabId = tabId;
   let newActive = tabManager.tabs.find(tab => tab.id === tabId);
   
+  if (newActive && newActive.isDetached) {
+    reattachDetachedTab(tabId);
+    return;
+  }
+
   if (newActive) {
     attachTabViewToMainWindow(newActive.view);
     updateActiveTabBounds();
@@ -848,14 +1042,16 @@ function closeTab(tabId) {
     }
 
     if (tabManager.activeTabId === tabId) {
-      let newIndex = index === 0 ? 1 : index - 1;
-      if (tabManager.tabs[newIndex]) {
-        switchTab(tabManager.tabs[newIndex].id);
+      const fallbackTabId = getFallbackActiveTabId(tabId);
+      if (fallbackTabId) {
+        switchTab(fallbackTabId);
       } else {
         tabManager.activeTabId = null;
       }
     }
+
     detachTabViewFromMainWindow(tab.view);
+    closeDetachedTabWindow(tab);
     tab.view.webContents.destroy();
     tabManager.tabs.splice(index, 1);
     
@@ -908,26 +1104,28 @@ function moveTab(tabId, targetIndex) {
 }
 
 function reorderTabs(orderedIds) {
-  if (!Array.isArray(orderedIds) || orderedIds.length !== tabManager.tabs.length) {
+  if (!Array.isArray(orderedIds)) {
     return false;
   }
 
   const tabById = new Map(tabManager.tabs.map((tab) => [tab.id, tab]));
-  const reorderedTabs = orderedIds
+  const orderedAttachedTabs = orderedIds
     .map((id) => tabById.get(Number(id)))
-    .filter(Boolean);
+    .filter((tab) => tab && !tab.isDetached);
+  const attachedTabs = tabManager.tabs.filter((tab) => !tab.isDetached);
 
-  if (reorderedTabs.length !== tabManager.tabs.length) {
+  if (orderedAttachedTabs.length !== attachedTabs.length) {
     return false;
   }
 
-  const primaryIndex = reorderedTabs.findIndex((tab) => tab.isPrimary);
+  const primaryIndex = orderedAttachedTabs.findIndex((tab) => tab.isPrimary);
   if (primaryIndex > 0) {
-    const [primaryTab] = reorderedTabs.splice(primaryIndex, 1);
-    reorderedTabs.unshift(primaryTab);
+    const [primaryTab] = orderedAttachedTabs.splice(primaryIndex, 1);
+    orderedAttachedTabs.unshift(primaryTab);
   }
 
-  tabManager.tabs = reorderedTabs;
+  const detachedTabs = tabManager.tabs.filter((tab) => tab.isDetached);
+  tabManager.tabs = [...orderedAttachedTabs, ...detachedTabs];
   sendTabsUpdate();
   return true;
 }
@@ -939,14 +1137,50 @@ function detachTabToWindow(tabId) {
   const tab = tabManager.tabs[index];
   if (!tab || tab.isPrimary) return false;
 
-  const targetUrl = tab.view?.webContents?.isDestroyed()
-    ? tab.url
-    : (tab.view.webContents.getURL() || tab.url);
+  if (tab.isDetached) {
+    if (tab.detachedWindow && !tab.detachedWindow.isDestroyed()) {
+      tab.detachedWindow.focus();
+      return true;
+    }
+    tab.isDetached = false;
+  }
 
-  const popupWindow = popupWindowService.open(targetUrl, tab.partition || APP_SESSION_PARTITION);
-  if (!popupWindow) return false;
+  tab.isDetached = true;
+  const detachedWindow = createDetachedTabWindow(tab);
+  if (!detachedWindow) {
+    tab.isDetached = false;
+    return false;
+  }
 
-  closeTab(tabId);
+  if (tabManager.activeTabId === tabId) {
+    const fallbackTabId = getFallbackActiveTabId(tabId);
+    if (fallbackTabId) {
+      switchTab(fallbackTabId);
+    } else {
+      tabManager.activeTabId = null;
+    }
+  }
+
+  sendTabsUpdate();
+  return true;
+}
+
+function reattachDetachedTab(tabId) {
+  const tab = tabManager.tabs.find((existingTab) => existingTab.id === Number(tabId));
+  if (!tab || !tab.isDetached || !tab.detachedWindow) return false;
+
+  tab.__reattaching = true;
+  closeDetachedTabWindow(tab);
+  tab.isDetached = false;
+  tab.__reattaching = false;
+
+  switchTab(tab.id);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  sendTabsUpdate();
   return true;
 }
 
@@ -959,6 +1193,7 @@ function sendTabsUpdate() {
       fullTitle: tab.fullTitle || tab.title,
       url: tab.url,
       isPrimary: Boolean(tab.isPrimary),
+      isDetached: Boolean(tab.isDetached),
       isFavorite: isFavoriteTab(tab)
     }));
     mainWindow.webContents.send('tabs-updated', { tabs: tabsForUI, activeTabId: tabManager.activeTabId });

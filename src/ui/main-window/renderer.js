@@ -908,7 +908,7 @@ function getPrimaryTab(data = currentTabsData) {
 }
 
 function getManagedTabs(data = currentTabsData) {
-  return data.filter((tab) => !tab.isPrimary);
+  return data.filter((tab) => !tab.isPrimary && !tab.isDetached);
 }
 
 function syncFavoriteTabIds(tabs = currentTabsData) {

@@ -4,6 +4,21 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-05-23
+
+### Added
+- Reacople de pestañas desacopladas: al arrastrar una ventana separada sobre la zona superior de la ventana principal, la pestaña vuelve a la barra principal como pestaña activa.
+- El reacople conserva el `WebContentsView` vivo, evitando recargar la página o perder estado interno de la sesión.
+
+### Changed
+- El desacople de pestañas ahora mueve la vista existente a una ventana contenedora en lugar de recrear la pestaña desde la URL.
+- Las pestañas desacopladas se ocultan de la barra principal mientras están en ventana separada y se preservan en el gestor interno hasta que se cierran o reacoplan.
+- El reacople se ejecuta con una pequeña espera al detectar la zona de acople para evitar bloqueos durante el arrastre nativo de la ventana.
+
+### Fixed
+- Corrección del bloqueo que podía producirse al reacoplar una pestaña desde una ventana separada.
+- Reversión del intento de registrar la aplicación como manejador de archivos locales desde Dolphin, ya que los documentos Office locales no pueden abrirse directamente dentro de la experiencia web de Microsoft 365.
+
 ## [2.7.0] - 2026-04-24
 
 ### Added

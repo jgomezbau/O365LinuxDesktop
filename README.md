@@ -2,7 +2,7 @@
 
 Aplicación de escritorio basada en Electron para trabajar con Microsoft 365 desde Linux con una interfaz de pestañas propia, integración con bandeja del sistema y soporte para abrir documentos y aplicaciones de Microsoft 365 sin depender de un navegador tradicional.
 
-Versión actual: `2.7.0`
+Versión actual: `2.7.1`
 
 ## Resumen
 
@@ -26,6 +26,7 @@ El proyecto incluye:
 - Desacople de pestañas a una ventana separada:
   - desde la tarjeta de información de pestaña
   - o arrastrando una pestaña fuera de la barra
+- Reacople de pestañas desacopladas al arrastrar la ventana separada de vuelta sobre la zona superior de la ventana principal, conservando el contenido vivo de la pestaña.
 - Sistema de overflow horizontal para pestañas con navegación por flechas cuando no entran todas en pantalla.
 - La pestaña activa se mantiene visible dentro de la ventana de overflow.
 
@@ -89,6 +90,7 @@ El proyecto incluye:
   - `Shift+Delete`
 - Registro del protocolo personalizado `ms365://`.
 - Bloqueo de múltiples instancias con recuperación de foco en la ventana existente.
+- La aplicación no se registra como manejador de archivos locales de Dolphin; los documentos locales deben abrirse con una app nativa o desde los flujos web de Microsoft 365.
 
 ### Menú contextual y apertura con aplicaciones nativas
 - Menú contextual personalizado dentro de las vistas web.
@@ -228,6 +230,7 @@ La aplicación almacena configuración y estado mediante `electron-store`, inclu
 - La restauración de pestañas depende de URLs restaurables; si un documento ya no está disponible, la aplicación lo omite en sesiones posteriores.
 - La información mostrada en la tarjeta de pestaña se infiere desde título, URL y metadatos disponibles; no todas las fuentes exponen la misma calidad de datos.
 - La detección de aplicaciones nativas para “Abrir con…” está orientada a Linux.
+- Los documentos Office locales (`.docx`, `.xlsx`, `.pptx`, etc.) no se abren directamente desde Dolphin dentro de la app web; deben estar disponibles en OneDrive/SharePoint o abrirse con una aplicación nativa.
 - La migración modular es incremental: el siguiente bloque grande pendiente es extraer `tabManager`, creación de `WebContentsView` y navegación por pestaña desde `src/main/index.js`.
 
 ## Licencia
