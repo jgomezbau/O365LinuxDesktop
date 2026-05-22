@@ -694,6 +694,40 @@ body.tab-drag-active {
   display: block;
 }
 
+.settings-about-row {
+  border-top: 1px solid var(--ms-border-color);
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.settings-about-btn {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--ms-border-color);
+  border-radius: 6px;
+  background-color: var(--ms-btn-bg);
+  color: var(--ms-text-color);
+  font-family: var(--ms-font-family);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.settings-about-btn:hover {
+  background-color: var(--ms-btn-hover);
+  border-color: color-mix(in srgb, var(--ms-accent-color) 35%, var(--ms-border-color));
+}
+
+.settings-about-btn .material-symbols-rounded {
+  color: var(--ms-accent-color);
+}
+
 .settings-footer {
   padding: 16px 20px;
   border-top: 1px solid var(--ms-border-color);
@@ -729,6 +763,167 @@ body.tab-drag-active {
 
 .settings-save-btn:hover {
   background-color: var(--ms-accent-hover);
+}
+
+.about-modal-overlay {
+  position: fixed;
+  top: var(--ms-header-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+
+.about-modal-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.about-backdrop {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  opacity: 0.96;
+}
+
+.about-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(9, 9, 9, 0.14), rgba(9, 9, 9, 0.3)),
+    radial-gradient(circle at top center, rgba(255, 255, 255, 0.04), transparent 42%);
+}
+
+.about-modal {
+  position: relative;
+  width: 430px;
+  max-width: calc(100vw - 32px);
+  padding: 22px;
+  border-radius: 8px;
+  background-color: var(--ms-bg-color);
+  color: var(--ms-text-color);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.24);
+  border: 1px solid var(--ms-border-color);
+  transform: translateY(-10px);
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+  -webkit-app-region: no-drag;
+}
+
+.about-modal-overlay.visible .about-modal {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.about-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.about-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.about-brand img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.about-brand h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 650;
+}
+
+.about-brand p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--ms-text-color) 62%, transparent);
+}
+
+.about-close-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ms-text-color);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.about-close-btn:hover {
+  background-color: var(--ms-btn-hover);
+}
+
+.about-description {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--ms-text-color) 76%, transparent);
+}
+
+.about-details {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--ms-border-color);
+  border-radius: 6px;
+  background-color: var(--ms-border-color);
+}
+
+.about-detail {
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background-color: var(--ms-bg-color);
+}
+
+.about-detail span {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--ms-text-color) 62%, transparent);
+}
+
+.about-detail strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.about-legal {
+  margin: 16px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--ms-text-color) 54%, transparent);
 }
 
 /* Scrollbar base */

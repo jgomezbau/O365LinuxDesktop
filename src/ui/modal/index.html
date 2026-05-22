@@ -52,11 +52,60 @@
           </label>
           <p class="settings-helper">Restaura automáticamente las pestañas abiertas en la sesión anterior.</p>
         </div>
+
+        <div class="settings-about-row">
+          <button class="settings-about-btn" id="settings-about-btn" type="button">
+            <span class="material-symbols-rounded" aria-hidden="true">info</span>
+            <span>Acerca de O365 Linux Desktop</span>
+          </button>
+        </div>
       </div>
       <div class="settings-footer">
         <button class="settings-cancel-btn" id="settings-cancel-btn" type="button">Cancelar</button>
         <button class="settings-save-btn" id="settings-save-btn" type="button">Guardar</button>
       </div>
+    </div>
+  </div>
+
+  <div id="about-modal-overlay" class="about-modal-overlay" data-modal="about">
+    <div id="about-backdrop" class="about-backdrop" aria-hidden="true"></div>
+    <div class="about-modal" role="dialog" aria-modal="true" aria-labelledby="about-title">
+      <div class="about-header">
+        <div class="about-brand">
+          <img src="../../assets/icons/icon.png" alt="" width="56" height="56">
+          <div>
+            <h2 id="about-title">O365 Linux Desktop</h2>
+            <p id="about-version">Versión</p>
+          </div>
+        </div>
+        <button class="about-close-btn" id="about-close-btn" type="button" title="Cerrar">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </div>
+      <p class="about-description">
+        Cliente de escritorio para Microsoft 365 en Linux, con navegación por pestañas, integración de bandeja y ventanas desacoplables.
+      </p>
+      <div class="about-details" aria-label="Componentes">
+        <div class="about-detail">
+          <span>Electron</span>
+          <strong id="about-electron">-</strong>
+        </div>
+        <div class="about-detail">
+          <span>Chromium</span>
+          <strong id="about-chromium">-</strong>
+        </div>
+        <div class="about-detail">
+          <span>Node.js</span>
+          <strong id="about-node">-</strong>
+        </div>
+        <div class="about-detail">
+          <span>Sistema</span>
+          <strong id="about-system">-</strong>
+        </div>
+      </div>
+      <p class="about-legal">
+        Proyecto independiente. Microsoft 365 y sus marcas pertenecen a sus respectivos propietarios.
+      </p>
     </div>
   </div>
 

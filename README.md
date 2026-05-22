@@ -2,7 +2,7 @@
 
 Aplicación de escritorio basada en Electron para trabajar con Microsoft 365 desde Linux con una interfaz de pestañas propia, integración con bandeja del sistema y soporte para abrir documentos y aplicaciones de Microsoft 365 sin depender de un navegador tradicional.
 
-Versión actual: `2.7.1`
+Versión actual: `2.7.2`
 
 ## Resumen
 
@@ -64,6 +64,7 @@ El proyecto incluye:
 
 ### Configuración y estado persistente
 - Modal flotante de configuración.
+- Panel `Acerca de` desde configuración con logo, versión de la aplicación y versiones de Electron, Chromium y Node.js.
 - Configuración persistente para:
   - URL principal: define la página que se abrirá al iniciar la aplicación y la que se usará para crear o recrear la pestaña principal.
   - User-Agent personalizado: permite cambiar cómo se identifica la aplicación ante los sitios web; no cambia la URL cargada. Si se deja vacío, la aplicación usa por defecto un User-Agent de Firefox en Linux.
@@ -161,6 +162,27 @@ npm run build:appimage
 npm run build:deb
 ```
 
+### Tests y CI
+
+```bash
+npm test
+```
+
+El test local valida JSON, sintaxis de los archivos JavaScript y consistencia entre `package.json`, `package-lock.json`, README y CHANGELOG.
+
+GitHub Actions ejecuta CI en cada push y pull request:
+- instala dependencias con `npm ci`
+- ejecuta `npm test`
+- valida el empaquetado Linux con `npm run build:dir`
+
+## Para hacer un commit y que se ejecuten los test
+npm test
+git status
+git diff --stat
+git add .
+git commit -m "Add about dialog and release automation"
+git push origin V2.7.2
+
 ## Empaquetado
 
 La configuración de `electron-builder` actual genera builds Linux con estos formatos:
@@ -169,6 +191,17 @@ La configuración de `electron-builder` actual genera builds Linux con estos for
 - tar.gz
 
 Los artefactos se escriben en `dist/`.
+
+## Publicación automática
+
+Al subir un tag con formato `Vx.y.z` o `vx.y.z`, GitHub Actions ejecuta tests, genera los artefactos Linux y publica una Release en GitHub.
+
+Ejemplo:
+
+```bash
+git tag V2.7.2
+git push origin V2.7.2
+```
 
 ## Estructura principal del proyecto
 

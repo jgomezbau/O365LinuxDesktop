@@ -1,14 +1,16 @@
 {
   "name": "o365linuxdesktop",
-  "version": "2.7.1",
+  "version": "2.7.2",
   "description": "Aplicación de escritorio moderna para Microsoft 365 en Linux",
   "author": "Juan Bau <jgomezbau@gmail.com>",
   "main": "main.js",
   "scripts": {
+    "test": "node scripts/check.js",
     "start": "electron . --enable-features=UseOzonePlatform --ozone-platform=x11",
     "start:x11": "electron . --enable-features=UseOzonePlatform --ozone-platform=x11",
     "start:wayland": "electron . --enable-features=UseOzonePlatform --ozone-platform=wayland",
     "build": "electron-builder",
+    "build:dir": "electron-builder --dir --linux",
     "build:appimage": "electron-builder --linux AppImage",
     "build:deb": "electron-builder --linux deb",
     "build:linux": "electron-builder --linux AppImage deb tar.gz"

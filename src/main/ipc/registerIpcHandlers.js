@@ -207,6 +207,18 @@ function registerIpcHandlers({
   ipcMain.handle('get-version', () => {
     return app.getVersion();
   });
+
+  ipcMain.handle('get-app-info', () => {
+    return {
+      name: app.getName(),
+      version: app.getVersion(),
+      electron: process.versions.electron || '',
+      chromium: process.versions.chrome || '',
+      node: process.versions.node || '',
+      platform: process.platform,
+      arch: process.arch
+    };
+  });
 }
 
 module.exports = {

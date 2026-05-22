@@ -5,11 +5,19 @@ const appLauncherGrid = document.getElementById('app-launcher-grid');
 const settingsCloseBtn = document.getElementById('settings-close-btn');
 const settingsCancelBtn = document.getElementById('settings-cancel-btn');
 const settingsSaveBtn = document.getElementById('settings-save-btn');
+const settingsAboutBtn = document.getElementById('settings-about-btn');
 const mainUrlPresetSelect = document.getElementById('main-url-preset');
 const mainUrlInput = document.getElementById('main-url');
 const userAgentInput = document.getElementById('user-agent');
 const themeSelect = document.getElementById('theme-select');
 const reopenTabsOnLaunchInput = document.getElementById('reopen-tabs-on-launch');
+const aboutModal = document.getElementById('about-modal-overlay');
+const aboutCloseBtn = document.getElementById('about-close-btn');
+const aboutVersion = document.getElementById('about-version');
+const aboutElectron = document.getElementById('about-electron');
+const aboutChromium = document.getElementById('about-chromium');
+const aboutNode = document.getElementById('about-node');
+const aboutSystem = document.getElementById('about-system');
 const tabInfoCard = document.getElementById('tab-info-card-modal');
 const tabInfoCardIcon = document.getElementById('tab-info-card-icon');
 const tabInfoCardTitle = document.getElementById('tab-info-card-title');
@@ -133,6 +141,25 @@ function closeModal() {
   window.modalAPI.close();
 }
 
+function formatRuntimeValue(value) {
+  return value ? String(value) : '-';
+}
+
+async function showAboutModal() {
+  const info = await window.modalAPI.getAppInfo();
+
+  aboutVersion.textContent = `Versión ${formatRuntimeValue(info.version)}`;
+  aboutElectron.textContent = formatRuntimeValue(info.electron);
+  aboutChromium.textContent = formatRuntimeValue(info.chromium);
+  aboutNode.textContent = formatRuntimeValue(info.node);
+  aboutSystem.textContent = `${formatRuntimeValue(info.platform)} ${formatRuntimeValue(info.arch)}`;
+  aboutModal.classList.add('visible');
+}
+
+function hideAboutModal() {
+  aboutModal.classList.remove('visible');
+}
+
 function positionAppLauncher(anchorRect = null) {
   const fallbackRight = 112;
   const launcherWidth = Math.min(360, window.innerWidth - 32);
@@ -182,6 +209,7 @@ function renderAppLauncher() {
 
 function hideAllOverlays() {
   settingsModal.classList.remove('visible');
+  aboutModal.classList.remove('visible');
   appLauncherOverlay.classList.remove('visible');
   tabInfoCard.classList.remove('visible');
   tabInfoCard.setAttribute('aria-hidden', 'true');
@@ -268,7 +296,20 @@ function setupEvents() {
     closeModal();
   });
 
+  settingsAboutBtn.addEventListener('click', () => {
+    showAboutModal().catch(console.error);
+  });
+
+  aboutCloseBtn.addEventListener('click', hideAboutModal);
+
+  aboutModal.addEventListener('click', (event) => {
+    if (!event.target.closest('.about-modal')) {
+      hideAboutModal();
+    }
+  });
+
   settingsModal.addEventListener('click', (event) => {
+    if (aboutModal.classList.contains('visible')) return;
     if (!event.target.closest('.settings-modal')) {
       closeModal();
     }
@@ -304,6 +345,11 @@ function setupEvents() {
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
+      if (aboutModal.classList.contains('visible')) {
+        hideAboutModal();
+        return;
+      }
+
       closeModal();
     }
   });

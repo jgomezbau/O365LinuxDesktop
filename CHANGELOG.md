@@ -4,6 +4,13 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 ## [Unreleased]
 
+## [2.7.2] - 2026-05-23
+
+### Added
+- Panel `Acerca de` en configuración con logo, versión de la aplicación y versiones de Electron, Chromium, Node.js y plataforma.
+- Workflows de GitHub Actions para CI en push/PR y publicación automática de Releases al subir tags `V*` o `v*`.
+- Script `npm test` para validar JSON, sintaxis JavaScript y consistencia documental de versión.
+
 ## [2.7.1] - 2026-05-23
 
 ### Added

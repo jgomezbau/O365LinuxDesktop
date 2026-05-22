@@ -21,5 +21,6 @@ contextBridge.exposeInMainWorld('modalAPI', {
   getTheme: () => ipcRenderer.invoke('get-theme'),
   setTheme: (theme) => ipcRenderer.invoke('set-theme', theme),
   getReopenTabsOnLaunch: () => ipcRenderer.invoke('get-reopen-tabs-on-launch'),
-  setReopenTabsOnLaunch: (enabled) => ipcRenderer.invoke('set-reopen-tabs-on-launch', enabled)
+  setReopenTabsOnLaunch: (enabled) => ipcRenderer.invoke('set-reopen-tabs-on-launch', enabled),
+  getAppInfo: () => ipcRenderer.invoke('get-app-info')
 });
