@@ -225,15 +225,61 @@ function renderTabInfoIcon(payload) {
   tabInfoCardIcon.innerHTML = `<span class="material-symbols-rounded">${iconSymbol}</span>`;
 }
 
+function isSafeHttpUrl(rawUrl = '') {
+  try {
+    const parsedUrl = new URL(rawUrl);
+    return parsedUrl.protocol === 'https:' || parsedUrl.protocol === 'http:';
+  } catch (error) {
+    return false;
+  }
+}
+
+function renderTabInfoLocation(payload = {}) {
+  const breadcrumbs = Array.isArray(payload.locationBreadcrumbs)
+    ? payload.locationBreadcrumbs.filter((breadcrumb) => breadcrumb && breadcrumb.label)
+    : [];
+
+  tabInfoCardLocation.classList.toggle('is-breadcrumb', breadcrumbs.length > 0);
+  tabInfoCardLocation.title = payload.locationText || 'No disponible';
+  tabInfoCardLocation.innerHTML = '';
+
+  if (!breadcrumbs.length) {
+    tabInfoCardLocation.textContent = payload.locationText || 'No disponible';
+    return;
+  }
+
+  breadcrumbs.forEach((breadcrumb, index) => {
+    if (index > 0) {
+      const separator = document.createElement('span');
+      separator.className = 'tab-info-card__breadcrumb-separator';
+      separator.textContent = ' > ';
+      tabInfoCardLocation.appendChild(separator);
+    }
+
+    const canOpen = isSafeHttpUrl(breadcrumb.url);
+    const item = document.createElement(canOpen ? 'button' : 'span');
+    item.className = 'tab-info-card__breadcrumb-item';
+    item.textContent = breadcrumb.label;
+
+    if (canOpen) {
+      item.type = 'button';
+      item.dataset.url = breadcrumb.url;
+      item.title = breadcrumb.url;
+    }
+
+    tabInfoCardLocation.appendChild(item);
+  });
+}
+
 function renderTabInfo(payload = {}) {
   renderTabInfoIcon(payload);
   tabInfoCardTitle.textContent = payload.title || 'Sin título';
   tabInfoCardTitle.title = payload.title || 'Sin título';
   tabInfoCardService.textContent = payload.service || 'Cloud';
   tabInfoCardLocationIcon.textContent = payload.locationIcon || 'cloud';
-  tabInfoCardLocation.textContent = payload.locationText || 'No disponible';
-  tabInfoCardLocation.title = payload.locationText || 'No disponible';
+  renderTabInfoLocation(payload);
   tabInfoCardLastSaved.textContent = payload.lastSaved || 'No disponible';
+  tabInfoCardLastSaved.title = payload.lastSavedUnavailableReason || payload.lastSaved || 'No disponible';
   tabInfoCardFavoriteBtn.classList.toggle('is-active', Boolean(payload.isFavorite));
   tabInfoCardFavoriteBtn.setAttribute('aria-pressed', payload.isFavorite ? 'true' : 'false');
   tabInfoCardFavoriteIcon.textContent = 'star';
@@ -334,6 +380,18 @@ function setupEvents() {
     const tabId = Number(tabInfoCard.dataset.tabId || 0);
     if (!tabId) return;
     window.modalAPI.toggleTabInfoFavorite(tabId);
+  });
+
+  tabInfoCardLocation.addEventListener('click', (event) => {
+    const breadcrumbItem = event.target.closest('.tab-info-card__breadcrumb-item[data-url]');
+    if (!breadcrumbItem) return;
+
+    event.stopPropagation();
+    const url = breadcrumbItem.dataset.url;
+    if (!isSafeHttpUrl(url)) return;
+
+    window.modalAPI.createTab({ url });
+    closeModal();
   });
 
   tabInfoCardDetachBtn.addEventListener('click', (event) => {

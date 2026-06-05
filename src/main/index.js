@@ -24,6 +24,7 @@ const { createTrayManager } = require('./tray/trayManager');
 const { createTabPersistence } = require('./tabs/tabPersistence');
 const { registerIpcHandlers } = require('./ipc/registerIpcHandlers');
 const { applyMicrosoftAppLauncherHiding } = require('./content/microsoftAppLauncherHider');
+const { createActiveTabDiagnosticsExporter } = require('./debug/activeTabDiagnostics');
 
 // Verificar si estamos en desarrollo
 const rootDir = path.join(__dirname, '..', '..');
@@ -198,6 +199,154 @@ const tabPersistence = createTabPersistence({
 });
 
 const { persistRestorableTabs, restoreSavedTabsAfterPrimaryLoad } = tabPersistence;
+
+const activeTabDiagnostics = createActiveTabDiagnosticsExporter({
+  app,
+  getTabs: () => tabManager.tabs,
+  getActiveTabId: () => tabManager.activeTabId,
+  showWebNotification,
+  logger: logger.child({ module: 'active-tab-diagnostics' })
+});
+
+function exportActiveTabDiagnostics() {
+  return activeTabDiagnostics.exportActiveTabDiagnostics();
+}
+
+const OFFICE_WOPI_METADATA_SCRIPT = `
+(() => {
+  try {
+    if (typeof window._wopiContextJson === 'object' && window._wopiContextJson) {
+      return window._wopiContextJson;
+    }
+
+    const scripts = Array.from(document.querySelectorAll('script'));
+    for (const script of scripts) {
+      const text = script.textContent || '';
+      const marker = 'var _wopiContextJson =';
+      const idx = text.indexOf(marker);
+      if (idx === -1) continue;
+
+      const start = text.indexOf('{', idx);
+      if (start === -1) continue;
+
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+
+      for (let i = start; i < text.length; i += 1) {
+        const ch = text[i];
+
+        if (inString) {
+          if (escape) {
+            escape = false;
+          } else if (ch === '\\\\') {
+            escape = true;
+          } else if (ch === '"') {
+            inString = false;
+          }
+          continue;
+        }
+
+        if (ch === '"') {
+          inString = true;
+        } else if (ch === '{') {
+          depth += 1;
+        } else if (ch === '}') {
+          depth -= 1;
+          if (depth === 0) {
+            const jsonText = text.slice(start, i + 1);
+            return JSON.parse(jsonText);
+          }
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    return { __error: String(error && error.message ? error.message : error) };
+  }
+})()
+`;
+
+function sanitizeOfficeMetadataUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+
+  try {
+    const parsedUrl = new URL(rawUrl);
+    const sensitiveParams = new Set([
+      'access_token',
+      'accesstoken',
+      'tempauth',
+      'filegeturl',
+      'downloadcode',
+      'bundlecode',
+      'authkey'
+    ]);
+    Array.from(parsedUrl.searchParams.keys()).forEach((key) => {
+      if (sensitiveParams.has(key.toLowerCase().replace(/[_-]/g, ''))) {
+        parsedUrl.searchParams.delete(key);
+      }
+    });
+    parsedUrl.hash = '';
+    return parsedUrl.toString();
+  } catch (error) {
+    return rawUrl.replace(/([?&](?:access_?token|tempauth|filegeturl|downloadcode|bundlecode|authkey)=)[^&#]+/gi, '$1[redacted]');
+  }
+}
+
+function sanitizeOfficeWopiMetadata(context) {
+  if (!context || typeof context !== 'object' || context.__error) return null;
+
+  const metadata = {
+    FileName: typeof context.FileName === 'string' ? context.FileName : '',
+    ParentFolderFullUrl: sanitizeOfficeMetadataUrl(context.ParentFolderFullUrl),
+    DocUrl: sanitizeOfficeMetadataUrl(context.DocUrl),
+    LastModified: Number.isFinite(Number(context.LastModified)) ? Number(context.LastModified) : null,
+    HostName: typeof context.HostName === 'string' ? context.HostName : '',
+    TenantName: typeof context.TenantName === 'string' ? context.TenantName : '',
+    DriveId: typeof context.DriveId === 'string' ? context.DriveId : '',
+    ParentId: typeof context.ParentId === 'string' ? context.ParentId : ''
+  };
+
+  if (!metadata.FileName && !metadata.ParentFolderFullUrl && !metadata.DocUrl && !metadata.LastModified) {
+    return null;
+  }
+
+  return metadata;
+}
+
+async function extractOfficeWopiMetadata(webContents) {
+  if (!webContents || webContents.isDestroyed()) return null;
+  const context = await webContents.executeJavaScript(OFFICE_WOPI_METADATA_SCRIPT, true);
+  return sanitizeOfficeWopiMetadata(context);
+}
+
+function scheduleOfficeWopiMetadataExtraction(tab) {
+  if (!tab || !tab.view || tab.view.webContents.isDestroyed()) return;
+
+  const requestId = (tab.__wopiMetadataRequestId || 0) + 1;
+  tab.__wopiMetadataRequestId = requestId;
+
+  setTimeout(() => {
+    if (!tab.view || tab.view.webContents.isDestroyed() || tab.__wopiMetadataRequestId !== requestId) return;
+
+    extractOfficeWopiMetadata(tab.view.webContents)
+      .then((metadata) => {
+        if (tab.__wopiMetadataRequestId !== requestId) return;
+        tab.officeMetadata = metadata;
+        sendTabsUpdate();
+      })
+      .catch((error) => {
+        if (tab.__wopiMetadataRequestId !== requestId) return;
+        tab.officeMetadata = null;
+        logger.debug('Office WOPI metadata extraction failed', {
+          tabId: tab.id,
+          error: error.message
+        });
+        sendTabsUpdate();
+      });
+  }, 250);
+}
 
 // Crea la ventana principal y carga el HTML
 function createMainWindow() {
@@ -580,6 +729,15 @@ function createWebContentsView(options = {}) {
     if (input.shift && key === 'delete') {
       event.preventDefault();
       view.webContents.cut();
+      return;
+    }
+
+    if (input.control && input.shift && key === 'd') {
+      event.preventDefault();
+      exportActiveTabDiagnostics().catch((error) => {
+        logger.error('Active tab diagnostics export failed', { error: error.message });
+        showWebNotification(`No se pudo exportar diagnóstico: ${error.message}`, 'error');
+      });
     }
   });
   
@@ -855,7 +1013,9 @@ function createTab(urlOrConfig, makeActive = false) {
     appId,
     isPrimary,
     isDetached: false,
-    detachedWindow: null
+    detachedWindow: null,
+    officeMetadata: null,
+    __wopiMetadataRequestId: 0
   };
   
   // Añadir a la lista de pestañas
@@ -878,6 +1038,8 @@ function createTab(urlOrConfig, makeActive = false) {
     const previousUrls = [tab.url, tab.restorableUrl];
     const sanitizedUrl = sanitizeRestorableUrl(nextUrl);
     tab.url = sanitizedUrl;
+    tab.officeMetadata = null;
+    tab.__wopiMetadataRequestId += 1;
 
     if (isOfficeDocumentUrl(nextUrl)) {
       tab.restorableUrl = sanitizedUrl;
@@ -976,6 +1138,7 @@ function createTab(urlOrConfig, makeActive = false) {
   
   // Actualizar pestañas después de cargar
   view.webContents.on('did-finish-load', () => {
+    scheduleOfficeWopiMetadataExtraction(tab);
     
     // Si esta pestaña debe ser activa, asegurarse de activarla de nuevo
     if (makeActive && tabManager.activeTabId === tabId) {
@@ -1192,6 +1355,7 @@ function sendTabsUpdate() {
       title: tab.title,
       fullTitle: tab.fullTitle || tab.title,
       url: tab.url,
+      officeMetadata: tab.officeMetadata || null,
       isPrimary: Boolean(tab.isPrimary),
       isDetached: Boolean(tab.isDetached),
       isFavorite: isFavoriteTab(tab)
@@ -1219,6 +1383,7 @@ registerIpcHandlers({
   moveTab,
   reorderTabs,
   detachTabToWindow,
+  exportActiveTabDiagnostics,
   toggleFavoriteForTab,
   sendTabsUpdate,
   persistRestorableTabs,

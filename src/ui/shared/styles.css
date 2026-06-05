@@ -1147,6 +1147,35 @@ body.tab-drag-active {
   text-overflow: ellipsis;
 }
 
+.tab-info-card__row-text.is-breadcrumb {
+  display: block;
+  white-space: normal;
+}
+
+.tab-info-card__breadcrumb-item {
+  display: inline;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+}
+
+button.tab-info-card__breadcrumb-item {
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+button.tab-info-card__breadcrumb-item:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.tab-info-card__breadcrumb-separator {
+  color: rgba(255, 255, 255, 0.42);
+}
+
 .tab-info-card__meta-value {
   min-width: 0;
   font-size: 12px;

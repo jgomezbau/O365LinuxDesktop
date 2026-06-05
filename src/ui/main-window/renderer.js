@@ -236,13 +236,68 @@ function isPdfTab(tab) {
   return lowerUrl.includes('.pdf') || lowerTitle.includes('.pdf') || lowerTitle.endsWith('pdf');
 }
 
+function isCloudFolderUrl(rawUrl = '') {
+  const lowerUrl = String(rawUrl || '').toLowerCase();
+  if (!lowerUrl) return false;
+
+  const hasOfficeFileMarker = [
+    '.doc',
+    '.docx',
+    '.xls',
+    '.xlsx',
+    '.xlsm',
+    '.ppt',
+    '.pptx',
+    'ithint=file%2c',
+    'ithint=file,',
+    'app=word',
+    'app=excel',
+    'app=powerpoint',
+    '/:w:/',
+    '/:x:/',
+    '/:p:/',
+    '/_layouts/15/doc.aspx',
+    '/_layouts/15/doc2.aspx',
+    '/_layouts/15/wopiframe.aspx'
+  ].some((pattern) => lowerUrl.includes(pattern));
+
+  if (hasOfficeFileMarker) return false;
+
+  try {
+    const parsedUrl = new URL(rawUrl);
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const pathname = parsedUrl.pathname.toLowerCase();
+    return (
+      hostname.includes('onedrive.live.com') ||
+      hostname.includes('-my.sharepoint.com') ||
+      hostname.includes('sharepoint.com') && (
+        pathname === '/my' ||
+        pathname.includes('/personal/') ||
+        pathname.includes('/sites/') ||
+        pathname.includes('/shared documents') ||
+        pathname.includes('/documents')
+      )
+    );
+  } catch (error) {
+    return lowerUrl.includes('onedrive.live.com') || lowerUrl.includes('-my.sharepoint.com');
+  }
+}
+
 function getTabServiceKey(tab) {
   const lowerUrl = (tab.url || '').toLowerCase();
   const lowerTitle = getTabInfoTitle(tab).toLowerCase();
+  const lowerWopiFileName = String(tab.officeMetadata?.FileName || '').toLowerCase();
   const iconPath = getTabIconPath(tab.url || '', getTabInfoTitle(tab));
 
   if (lowerUrl.startsWith('file://')) return 'local';
   if (isPdfTab(tab)) return 'pdf';
+  if (isCloudFolderUrl(tab.url || '')) {
+    if (lowerUrl.includes('onedrive') || lowerUrl.includes('-my.sharepoint.com')) return 'onedrive';
+    if (lowerUrl.includes('sharepoint')) return 'sharepoint';
+  }
+  if (lowerWopiFileName.endsWith('.docx') || lowerWopiFileName.endsWith('.doc')) return 'word';
+  if (lowerWopiFileName.endsWith('.xlsx') || lowerWopiFileName.endsWith('.xls')) return 'excel';
+  if (lowerWopiFileName.endsWith('.pptx') || lowerWopiFileName.endsWith('.ppt')) return 'powerpoint';
   if (iconPath?.includes('word.png')) return 'word';
   if (iconPath?.includes('excel.png')) return 'excel';
   if (iconPath?.includes('powerpoint.png')) return 'powerpoint';
@@ -284,21 +339,47 @@ function formatLocationSegment(segment = '') {
     .trim();
 }
 
+function decodeLocationValue(value = '') {
+  let decodedValue = String(value || '');
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const nextValue = decodeURIComponent(decodedValue);
+      if (nextValue === decodedValue) break;
+      decodedValue = nextValue;
+    } catch (error) {
+      break;
+    }
+  }
+
+  return decodedValue;
+}
+
 function isTechnicalPathSegment(segment = '') {
-  const value = String(segment || '').trim().toLowerCase();
+  const value = String(segment || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^_+/, '');
   if (!value) return true;
 
   if ([
-    '_layouts',
+    'layout',
+    'layouts',
     '15',
     'doc.aspx',
     'doc2.aspx',
     'wopiframe.aspx',
     'guestaccess.aspx',
-    '_forms',
+    ':w:',
+    ':x:',
+    ':p:',
+    ':o:',
+    'r',
+    'u',
     'forms',
     'default.aspx',
     'allitems.aspx',
+    'allitems',
     'personal',
     'sites',
     'documents',
@@ -328,17 +409,289 @@ function uniqueSegments(segments = []) {
 }
 
 function extractFriendlySegmentsFromPath(rawPath = '') {
-  return String(rawPath || '')
+  return decodeLocationValue(rawPath)
+    .replace(/^https?:\/\//i, '')
+    .replace(/\\/g, '/')
     .split('/')
     .map((segment) => {
-      try {
-        return decodeURIComponent(segment);
-      } catch (error) {
-        return segment;
-      }
+      return decodeLocationValue(segment);
     })
     .map((segment) => formatLocationSegment(segment))
     .filter((segment) => !isTechnicalPathSegment(segment));
+}
+
+function getSearchParamValue(searchParams, targetKey) {
+  const normalizedTargetKey = targetKey.toLowerCase();
+
+  for (const [key, value] of searchParams.entries()) {
+    if (key.toLowerCase() === normalizedTargetKey) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+function getHostnameLocationLabel(hostname = '') {
+  const normalizedHostname = String(hostname || '').toLowerCase();
+  if (!normalizedHostname) return '';
+
+  if (normalizedHostname.includes('onedrive')) return 'OneDrive';
+  if (normalizedHostname.includes('sharepoint')) {
+    const tenantName = formatLocationSegment(normalizedHostname.split('.')[0]?.replace(/-my$/i, '') || '');
+    return tenantName ? `SharePoint - ${tenantName}` : 'SharePoint';
+  }
+  if (normalizedHostname.includes('office.com') || normalizedHostname.includes('microsoft365.com')) return 'Microsoft 365';
+  if (normalizedHostname.includes('live.com')) return 'OneDrive';
+
+  return normalizedHostname;
+}
+
+function normalizeOfficeFolderSegment(segment = '') {
+  return formatLocationSegment(segment);
+}
+
+function getCloudLabelFromUrl(parsedUrl, metadata = {}) {
+  const hostname = parsedUrl.hostname.toLowerCase();
+  const hostName = String(metadata.HostName || '').toLowerCase();
+
+  if (hostname.includes('onedrive') || hostname.includes('docs.live.net') || hostName.includes('consumer')) {
+    return 'OneDrive';
+  }
+
+  if (hostname.includes('sharepoint') || hostName.includes('sharepoint')) {
+    return 'SharePoint';
+  }
+
+  return getHostnameLocationLabel(hostname) || 'Microsoft 365';
+}
+
+function isOneDriveConsumerUrl(parsedUrl, metadata = {}) {
+  const hostname = parsedUrl.hostname.toLowerCase();
+  const hostName = String(metadata.HostName || '').toLowerCase();
+  return hostname.includes('onedrive.live.com') || hostname.includes('docs.live.net') || hostName.includes('consumer');
+}
+
+function isSharePointPersonalOneDriveUrl(parsedUrl) {
+  return parsedUrl.hostname.toLowerCase().includes('-my.sharepoint.com');
+}
+
+function buildOneDriveConsumerUrl() {
+  return 'https://onedrive.live.com/?view=0';
+}
+
+function buildOneDriveConsumerPathUrl(pathSegments = []) {
+  if (!pathSegments.length) return '';
+
+  const decodedPath = `/${pathSegments.map((segment) => decodeLocationValue(segment)).join('/')}`;
+  return `https://onedrive.live.com/?id=${encodeURIComponent(decodedPath)}&view=0`;
+}
+
+function buildSharePointPersonalOneDriveUrl(parsedUrl, pathSegments = []) {
+  if (!pathSegments.length) {
+    return `${parsedUrl.origin}/my`;
+  }
+
+  const decodedPath = `/${pathSegments.map((segment) => decodeLocationValue(segment)).join('/')}`;
+  return `${parsedUrl.origin}/my?id=${encodeURIComponent(decodedPath)}`;
+}
+
+function buildOfficeFolderBreadcrumbs(rawUrl = '', metadata = {}) {
+  if (!rawUrl) return [];
+
+  try {
+    const decodedUrl = decodeLocationValue(rawUrl);
+    const parsedUrl = new URL(decodedUrl);
+    const cloudLabel = getCloudLabelFromUrl(parsedUrl, metadata);
+    const useOneDriveConsumerLinks = isOneDriveConsumerUrl(parsedUrl, metadata);
+    const useSharePointPersonalLinks = isSharePointPersonalOneDriveUrl(parsedUrl);
+    const breadcrumbs = [{
+      label: cloudLabel,
+      url: useOneDriveConsumerLinks
+        ? buildOneDriveConsumerUrl()
+        : (useSharePointPersonalLinks ? buildSharePointPersonalOneDriveUrl(parsedUrl) : parsedUrl.origin)
+    }];
+    const pathSegments = decodeLocationValue(parsedUrl.pathname)
+      .replace(/\\/g, '/')
+      .split('/')
+      .filter(Boolean);
+
+    const visibleLabels = new Set([cloudLabel.toLowerCase()]);
+    const accumulatedSegments = [];
+    const oneDrivePathSegments = [];
+    for (let index = 0; index < pathSegments.length; index += 1) {
+      const segment = pathSegments[index];
+      accumulatedSegments.push(segment);
+      const normalizedSegment = normalizeOfficeFolderSegment(segment);
+      const lowerSegment = normalizedSegment.toLowerCase();
+
+      if (lowerSegment === 'personal') {
+        if (pathSegments[index + 1]) {
+          accumulatedSegments.push(pathSegments[index + 1]);
+        }
+        index += 1;
+        continue;
+      }
+
+      if (
+        useOneDriveConsumerLinks &&
+        lowerSegment === 'documents' &&
+        breadcrumbs.length === 1
+      ) {
+        continue;
+      }
+
+      if (
+        lowerSegment !== 'documents' &&
+        lowerSegment !== 'documentos' &&
+        lowerSegment !== 'shared documents' &&
+        lowerSegment !== 'documentos compartidos' &&
+        isTechnicalPathSegment(normalizedSegment)
+      ) {
+        continue;
+      }
+
+      if (visibleLabels.has(lowerSegment)) continue;
+      visibleLabels.add(lowerSegment);
+      oneDrivePathSegments.push(segment);
+
+      const segmentUrl = new URL(parsedUrl.toString());
+      segmentUrl.pathname = `/${accumulatedSegments
+        .map((pathSegment) => encodeURIComponent(decodeLocationValue(pathSegment)))
+        .join('/')}`;
+      segmentUrl.search = '';
+      segmentUrl.hash = '';
+      const breadcrumbUrl = useOneDriveConsumerLinks
+        ? buildOneDriveConsumerPathUrl(accumulatedSegments)
+        : (useSharePointPersonalLinks ? buildSharePointPersonalOneDriveUrl(parsedUrl, accumulatedSegments) : segmentUrl.toString());
+
+      breadcrumbs.push({
+        label: normalizedSegment,
+        url: breadcrumbUrl
+      });
+    }
+
+    return breadcrumbs;
+  } catch (error) {
+    const lowerUrl = String(rawUrl || '').toLowerCase();
+    if (lowerUrl.includes('onedrive') || lowerUrl.includes('docs.live.net')) return [{ label: 'OneDrive', url: '' }];
+    if (lowerUrl.includes('sharepoint')) return [{ label: 'SharePoint', url: '' }];
+    return [];
+  }
+}
+
+function formatOfficeBreadcrumbs(breadcrumbs = []) {
+  return breadcrumbs.map((breadcrumb) => breadcrumb.label).filter(Boolean).join(' > ');
+}
+
+function formatOfficeFolderUrl(rawUrl = '', metadata = {}) {
+  return formatOfficeBreadcrumbs(buildOfficeFolderBreadcrumbs(rawUrl, metadata));
+}
+
+function removeDocumentNameFromLocationSegments(segments = [], title = '', rawUrl = '') {
+  const documentNames = [cleanTabTitle(title), extractFullFileName(rawUrl)]
+    .filter(Boolean)
+    .map((value) => value.toLowerCase());
+
+  if (!segments.length || !documentNames.length) return segments;
+
+  return segments.filter((segment, index) => {
+    if (index !== segments.length - 1) return true;
+    const normalizedSegment = segment.toLowerCase();
+    return !documentNames.some((documentName) => normalizedSegment === documentName);
+  });
+}
+
+function inferOfficeFolderFromDocUrl(docUrl = '', fileName = '', metadata = {}) {
+  if (!docUrl) return '';
+
+  try {
+    const decodedUrl = decodeLocationValue(docUrl);
+    const parsedUrl = new URL(decodedUrl);
+    const segments = decodeLocationValue(parsedUrl.pathname).split('/').filter(Boolean);
+    const decodedFileName = decodeLocationValue(fileName || '');
+
+    if (decodedFileName && segments.length && decodeLocationValue(segments[segments.length - 1]) === decodedFileName) {
+      segments.pop();
+    } else if (segments.length) {
+      segments.pop();
+    }
+
+    parsedUrl.pathname = `/${segments.map((segment) => encodeURIComponent(decodeLocationValue(segment))).join('/')}`;
+    parsedUrl.search = '';
+    parsedUrl.hash = '';
+
+    return formatOfficeFolderUrl(parsedUrl.toString(), metadata);
+  } catch (error) {
+    return '';
+  }
+}
+
+function buildOfficeBreadcrumbsFromDocUrl(docUrl = '', fileName = '', metadata = {}) {
+  if (!docUrl) return [];
+
+  try {
+    const decodedUrl = decodeLocationValue(docUrl);
+    const parsedUrl = new URL(decodedUrl);
+    const segments = decodeLocationValue(parsedUrl.pathname).split('/').filter(Boolean);
+    const decodedFileName = decodeLocationValue(fileName || '');
+
+    if (decodedFileName && segments.length && decodeLocationValue(segments[segments.length - 1]) === decodedFileName) {
+      segments.pop();
+    } else if (segments.length) {
+      segments.pop();
+    }
+
+    parsedUrl.pathname = `/${segments.map((segment) => encodeURIComponent(decodeLocationValue(segment))).join('/')}`;
+    parsedUrl.search = '';
+    parsedUrl.hash = '';
+
+    return buildOfficeFolderBreadcrumbs(parsedUrl.toString(), metadata);
+  } catch (error) {
+    return [];
+  }
+}
+
+function inferOfficeMetadataLocationInfo(metadata = {}) {
+  const parentBreadcrumbs = buildOfficeFolderBreadcrumbs(metadata.ParentFolderFullUrl || '', metadata);
+  const parentLocation = formatOfficeBreadcrumbs(parentBreadcrumbs);
+  if (parentLocation) {
+    return {
+      text: parentLocation,
+      breadcrumbs: parentBreadcrumbs
+    };
+  }
+
+  const docLocation = inferOfficeFolderFromDocUrl(metadata.DocUrl || '', metadata.FileName || '', metadata);
+  if (docLocation) {
+    return {
+      text: docLocation,
+      breadcrumbs: buildOfficeBreadcrumbsFromDocUrl(metadata.DocUrl || '', metadata.FileName || '', metadata)
+    };
+  }
+
+  if (metadata.HostName || metadata.TenantName) {
+    const fallbackBreadcrumbs = [metadata.HostName, metadata.TenantName]
+      .filter(Boolean)
+      .map((label) => ({ label, url: '' }));
+    return {
+      text: formatOfficeBreadcrumbs(fallbackBreadcrumbs),
+      breadcrumbs: fallbackBreadcrumbs
+    };
+  }
+
+  return {
+    text: '',
+    breadcrumbs: []
+  };
+}
+
+function isWeakLocationSegment(segment = '') {
+  const value = String(segment || '').trim().toLowerCase();
+  if (!value) return true;
+  if (value === 'layout' || value === 'layouts') return true;
+  if (value.length <= 2) return true;
+  return false;
 }
 
 function getCloudRootLabel(serviceKey, hostname = '') {
@@ -362,8 +715,8 @@ function getFriendlyCloudLocation(serviceKey, rawUrl = '', fallbackTitle = '') {
 
     pathSegments.push(...extractFriendlySegmentsFromPath(parsedUrl.pathname));
 
-    ['id', 'parent', 'rootfolder', 'file', 'filepath'].forEach((key) => {
-      const value = parsedUrl.searchParams.get(key);
+    ['id', 'parent', 'rootfolder', 'file', 'filepath', 'path'].forEach((key) => {
+      const value = getSearchParamValue(parsedUrl.searchParams, key);
       if (!value) return;
       pathSegments.push(...extractFriendlySegmentsFromPath(value));
     });
@@ -375,27 +728,38 @@ function getFriendlyCloudLocation(serviceKey, rawUrl = '', fallbackTitle = '') {
       }
     }
 
-    const cleanedSegments = uniqueSegments(pathSegments);
+    const cleanedSegments = removeDocumentNameFromLocationSegments(
+      uniqueSegments(pathSegments),
+      fallbackTitle,
+      rawUrl
+    );
 
-    if (cleanedSegments.length > 0) {
+    if (cleanedSegments.length > 0 && !cleanedSegments.every((segment) => isWeakLocationSegment(segment))) {
       return cleanedSegments.join(' > ');
     }
 
-    const cleanedTitle = cleanTabTitle(fallbackTitle);
-    if (cleanedTitle) {
-      return cleanedTitle;
-    }
+    const hostnameLabel = getHostnameLocationLabel(hostname);
+    if (hostnameLabel) return hostnameLabel;
 
     if (serviceKey === 'outlook') return 'Buzón';
     if (serviceKey === 'teams') return 'Espacio de trabajo';
-    return 'Ubicación no disponible';
+    return rootLabel || 'Microsoft 365';
   } catch (error) {
-    const cleanedTitle = cleanTabTitle(fallbackTitle);
-    return cleanedTitle || 'Ubicación no disponible';
+    return getServiceLabel(serviceKey) || 'Microsoft 365';
   }
 }
 
 function inferTabLocation(tab, serviceKey) {
+  const officeMetadataLocation = inferOfficeMetadataLocationInfo(tab.officeMetadata || {});
+  if (officeMetadataLocation.text) {
+    return {
+      icon: 'cloud',
+      text: officeMetadataLocation.text,
+      isCloud: true,
+      breadcrumbs: officeMetadataLocation.breadcrumbs
+    };
+  }
+
   const rawUrl = tab.url || '';
 
   if (rawUrl.startsWith('file://')) {
@@ -407,13 +771,15 @@ function inferTabLocation(tab, serviceKey) {
       return {
         icon: 'computer',
         text: locationParts.length ? locationParts.join(' > ') : (localPath || 'Ubicación no disponible'),
-        isCloud: false
+        isCloud: false,
+        breadcrumbs: []
       };
     } catch (error) {
       return {
         icon: 'computer',
         text: 'Ubicación no disponible',
-        isCloud: false
+        isCloud: false,
+        breadcrumbs: []
       };
     }
   }
@@ -421,15 +787,40 @@ function inferTabLocation(tab, serviceKey) {
   return {
     icon: 'cloud',
     text: getFriendlyCloudLocation(serviceKey, rawUrl, getTabInfoTitle(tab)),
-    isCloud: true
+    isCloud: true,
+    breadcrumbs: []
   };
 }
 
+function formatOfficeLastModified(lastModified) {
+  const timestamp = Number(lastModified);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return '';
+
+  try {
+    return new Date(timestamp).toLocaleString(undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (error) {
+    return '';
+  }
+}
+
 function getLastSavedValue(tab) {
-  if (tab.lastSaved) return tab.lastSaved;
-  if (tab.savedAt) return tab.savedAt;
-  if (tab.lastModified) return tab.lastModified;
-  return 'No disponible';
+  const officeLastModified = formatOfficeLastModified(tab.officeMetadata?.LastModified);
+  if (officeLastModified) return { text: officeLastModified, reason: '' };
+  if (tab.lastSaved) return { text: tab.lastSaved, reason: '' };
+  if (tab.savedAt) return { text: tab.savedAt, reason: '' };
+  if (tab.lastModified) return { text: tab.lastModified, reason: '' };
+  if (tab.modifiedTime) return { text: tab.modifiedTime, reason: '' };
+
+  return {
+    text: 'No disponible',
+    reason: 'Microsoft 365 no expuso una fecha real de última modificación por URL, _wopiContextJson ni API disponible del proyecto.'
+  };
 }
 
 function normalizeTabInfo(tab) {
@@ -441,10 +832,12 @@ function normalizeTabInfo(tab) {
   const cleanedTitle = cleanTabTitle(rawTitle);
   const fullFileName = extractFullFileName(tab.url || '');
   const fallbackTitle = service === 'Equipo local' ? 'Archivo local' : service;
-  const title = cleanedTitle || fullFileName || fallbackTitle;
+  const wopiFileName = sanitizeFileNameCandidate(tab.officeMetadata?.FileName || '');
+  const title = wopiFileName || cleanedTitle || fullFileName || fallbackTitle;
   const location = inferTabLocation(tab, serviceKey);
   const iconPath = getTabIconPath(tab.url || '', rawTitle);
   const iconSymbol = iconPath ? null : getTabIconSymbol(tab.url || '', rawTitle);
+  const lastSaved = getLastSavedValue(tab);
 
   if (!title || isTechnicalTabTitle(title)) return null;
 
@@ -452,9 +845,11 @@ function normalizeTabInfo(tab) {
     title,
     source: service,
     location: location.text || 'Ubicación no disponible',
+    locationBreadcrumbs: location.breadcrumbs || [],
     locationIcon: location.icon,
     isCloud: location.isCloud,
-    lastSaved: getLastSavedValue(tab),
+    lastSaved: lastSaved.text,
+    lastSavedUnavailableReason: lastSaved.reason,
     iconPath,
     iconSymbol,
     iconType: serviceKey
@@ -469,13 +864,15 @@ function buildTabInfoPayload(tab, anchorElement = tabInfoState.anchorElement) {
 
   const anchorRect = anchorElement.getBoundingClientRect();
 
-  return {
+  const payload = {
     tabId: tab.id,
     title: friendlyInfo.title,
     service: friendlyInfo.source,
     locationIcon: friendlyInfo.locationIcon,
     locationText: friendlyInfo.location,
+    locationBreadcrumbs: friendlyInfo.locationBreadcrumbs,
     lastSaved: friendlyInfo.lastSaved,
+    lastSavedUnavailableReason: friendlyInfo.lastSavedUnavailableReason,
     iconPath: friendlyInfo.iconPath,
     iconSymbol: friendlyInfo.iconSymbol,
     isFavorite: favoriteTabIds.has(tab.id),
@@ -489,6 +886,8 @@ function buildTabInfoPayload(tab, anchorElement = tabInfoState.anchorElement) {
       height: anchorRect.height
     }
   };
+
+  return payload;
 }
 
 function refreshVisibleTabInfoCard() {
@@ -752,6 +1151,27 @@ function getTabIconPath(url, title) {
       lowerUrl.includes(`.${extension}&`) ||
       lowerUrl.endsWith(`.${extension}`)
     );
+  }
+
+  function hasUrlFileHint(extensions) {
+    return extensions.some((extension) =>
+      lowerUrl.includes(`ithint=file%2c${extension}`) ||
+      lowerUrl.includes(`ithint=file,${extension}`) ||
+      lowerUrl.includes(`filetype=${extension}`) ||
+      lowerUrl.includes(`.${extension}&`) ||
+      lowerUrl.includes(`.${extension}?`) ||
+      lowerUrl.endsWith(`.${extension}`)
+    );
+  }
+
+  if (isCloudFolderUrl(url)) {
+    if (lowerUrl.includes('onedrive') || lowerUrl.includes('-my.sharepoint.com')) {
+      return '../../assets/icons/onedrive.png';
+    }
+
+    if (lowerUrl.includes('sharepoint')) {
+      return '../../assets/icons/sharepoint.png';
+    }
   }
 
   // Priorizar detección por título y extensión del archivo

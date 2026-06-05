@@ -15,6 +15,7 @@ function registerIpcHandlers({
   moveTab,
   reorderTabs,
   detachTabToWindow,
+  exportActiveTabDiagnostics,
   toggleFavoriteForTab,
   sendTabsUpdate,
   persistRestorableTabs,
@@ -47,6 +48,14 @@ function registerIpcHandlers({
   ipcMain.on('detach-tab-to-window', (event, tabId) => {
     tabDragGhost.hide();
     detachTabToWindow(tabId);
+  });
+
+  ipcMain.handle('debug:export-active-tab-diagnostics', async () => {
+    if (typeof exportActiveTabDiagnostics !== 'function') {
+      throw new Error('El exportador de diagnóstico no está disponible.');
+    }
+
+    return exportActiveTabDiagnostics();
   });
 
   ipcMain.on('show-tab-drag-ghost', (event, payload) => {

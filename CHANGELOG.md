@@ -4,6 +4,32 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 ## [Unreleased]
 
+## [2.7.3] - 2026-06-05
+
+### Added
+- Lectura de metadata real de documentos Microsoft 365 desde `_wopiContextJson` dentro del `webContents` de cada pestaña.
+- Soporte para nombre real de archivo, carpeta padre y última modificación en la tarjeta contextual de pestañas usando los campos seguros `FileName`, `ParentFolderFullUrl`, `DocUrl`, `LastModified`, `HostName`, `TenantName`, `DriveId` y `ParentId`.
+- Breadcrumb accionable para ubicaciones cloud en la tarjeta contextual.
+- Apertura de ubicaciones de OneDrive y SharePoint en pestañas nuevas desde los segmentos del breadcrumb.
+- Modo de diagnóstico manual de pestaña activa con `Ctrl+Shift+D` y API `window.electronAPI.exportActiveTabDiagnostics()`, exportando un JSON local para analizar DOM, scripts, recursos, enlaces y posibles fuentes de metadata.
+
+### Changed
+- La tarjeta contextual prioriza metadata WOPI por encima de inferencias por URL o título cuando Microsoft 365 la expone.
+- El servicio de la pestaña se detecta también desde la extensión del archivo reportada por WOPI (`.docx`, `.xlsx`, `.pptx`).
+- La ubicación cloud se muestra como breadcrumb con separador ` > `.
+- Las URLs de OneDrive personal se generan con el patrón `https://onedrive.live.com/?id=<path>&view=0`, preservando los segmentos reales de ruta para abrir carpetas intermedias.
+- Las URLs de OneDrive empresarial sobre SharePoint personal se generan con el patrón `https://tenant-my.sharepoint.com/my?id=<path>`.
+- La carpeta técnica inicial `Documents` de OneDrive personal se conserva en los links, pero no se muestra como nivel visual duplicado cuando solo actúa como raíz de documentos.
+- La extracción de metadata WOPI se ejecuta de forma asíncrona y con control anti-stale para no bloquear la UI ni aplicar resultados de navegaciones anteriores.
+
+### Fixed
+- Corrección de la ubicación vacía o incorrecta en tarjetas de documentos Word, Excel y PowerPoint abiertos desde OneDrive o SharePoint.
+- Corrección del falso segmento `layout`/`layouts` producido por URLs técnicas de Office como `/_layouts/15/...`.
+- Corrección del fallback de “Última vez guardado” para mostrar `No disponible` solo cuando no existe una fecha real expuesta.
+- Corrección de enlaces de breadcrumb que abrían OneDrive en raíz o producían errores de archivo no encontrado.
+- Corrección del icono de pestañas de carpeta cloud para que no queden marcadas como Word/Excel/PowerPoint por títulos transitorios o heredados.
+- Evita exponer tokens o parámetros sensibles (`tempauth`, `AccessToken`, `FileGetUrl`, `DownloadCode`, `BundleCode`, entre otros) en metadata usada por la UI.
+
 ## [2.7.2] - 2026-05-23
 
 ### Added

@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showTabDragGhost: (payload) => ipcRenderer.send('show-tab-drag-ghost', payload),
   moveTabDragGhost: (payload) => ipcRenderer.send('move-tab-drag-ghost', payload),
   hideTabDragGhost: () => ipcRenderer.send('hide-tab-drag-ghost'),
+  exportActiveTabDiagnostics: () => ipcRenderer.invoke('debug:export-active-tab-diagnostics'),
   onTabsUpdated: (callback) => {
     ipcRenderer.on('tabs-updated', (event, data) => callback(data));
     // Devolver función para eliminar listener cuando sea necesario

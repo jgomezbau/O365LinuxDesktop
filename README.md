@@ -2,7 +2,7 @@
 
 Aplicación de escritorio basada en Electron para trabajar con Microsoft 365 desde Linux con una interfaz de pestañas propia, integración con bandeja del sistema y soporte para abrir documentos y aplicaciones de Microsoft 365 sin depender de un navegador tradicional.
 
-Versión actual: `2.7.2`
+Versión actual: `2.7.3`
 
 ## Resumen
 
@@ -38,7 +38,15 @@ El proyecto incluye:
 
 ### Tarjeta de información de pestaña
 - Tarjeta contextual flotante al pasar el mouse sobre una pestaña.
-- Muestra icono, título, servicio, ubicación inferida y dato de “Última vez guardado”.
+- Muestra icono, título, servicio, ubicación y dato de “Última vez guardado”.
+- Para documentos Word, Excel y PowerPoint abiertos desde OneDrive o SharePoint, la tarjeta intenta leer metadata real de Microsoft 365 desde `_wopiContextJson`.
+- Cuando Microsoft 365 expone metadata WOPI, la tarjeta usa:
+  - nombre real del archivo
+  - carpeta padre desde `ParentFolderFullUrl`
+  - última modificación desde `LastModified`
+- La ubicación cloud se muestra como breadcrumb (`OneDrive > Carpeta > Subcarpeta`) y los niveles con URL confiable se pueden abrir en una pestaña nueva.
+- Para OneDrive personal y OneDrive empresarial sobre SharePoint se generan URLs de carpeta compatibles con los patrones de navegación web de Microsoft 365.
+- Si Microsoft 365 no expone una fecha real de modificación, la tarjeta muestra `No disponible` de forma explícita.
 - Permite:
   - marcar o desmarcar favoritos
   - desacoplar la pestaña a una ventana
@@ -89,6 +97,7 @@ El proyecto incluye:
   - `Ctrl+C`, `Ctrl+V`
   - `Shift+Insert`
   - `Shift+Delete`
+- Diagnóstico manual de pestaña activa con `Ctrl+Shift+D`, que exporta un JSON local con información del DOM, scripts, recursos y estado visible de la pestaña para análisis de compatibilidad. El volcado solo se genera al invocar explícitamente el atajo o la API de diagnóstico desde DevTools.
 - Registro del protocolo personalizado `ms365://`.
 - Bloqueo de múltiples instancias con recuperación de foco en la ventana existente.
 - La aplicación no se registra como manejador de archivos locales de Dolphin; los documentos locales deben abrirse con una app nativa o desde los flujos web de Microsoft 365.
@@ -180,8 +189,8 @@ npm test
 git status
 git diff --stat
 git add .
-git commit -m "Add about dialog and release automation"
-git push origin V2.7.2
+git commit -m "Release 2.7.3"
+git push origin V2.7.3
 
 ## Empaquetado
 
@@ -199,8 +208,8 @@ Al subir un tag con formato `Vx.y.z` o `vx.y.z`, GitHub Actions ejecuta tests, g
 Ejemplo:
 
 ```bash
-git tag V2.7.2
-git push origin V2.7.2
+git tag V2.7.3
+git push origin V2.7.3
 ```
 
 ## Estructura principal del proyecto
