@@ -31,7 +31,7 @@ jobs:
         run: npm test
 
       - name: Build Linux artifacts
-        run: npm run build:linux
+        run: npx electron-builder --linux AppImage deb tar.gz --publish never
 
       - name: Publish GitHub Release
         env:

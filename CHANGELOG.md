@@ -29,6 +29,7 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 - Corrección de enlaces de breadcrumb que abrían OneDrive en raíz o producían errores de archivo no encontrado.
 - Corrección del icono de pestañas de carpeta cloud para que no queden marcadas como Word/Excel/PowerPoint por títulos transitorios o heredados.
 - Evita exponer tokens o parámetros sensibles (`tempauth`, `AccessToken`, `FileGetUrl`, `DownloadCode`, `BundleCode`, entre otros) en metadata usada por la UI.
+- Corrección del workflow de release para desactivar la publicación implícita de `electron-builder` y publicar artefactos solo mediante `gh release`.
 
 ## [2.7.2] - 2026-05-23
 
