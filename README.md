@@ -2,7 +2,7 @@
 
 Aplicación de escritorio basada en Electron para trabajar con Microsoft 365 desde Linux con una interfaz de pestañas propia, integración con bandeja del sistema y soporte para abrir documentos y aplicaciones de Microsoft 365 sin depender de un navegador tradicional.
 
-Versión actual: `2.7.3`
+Versión actual: `2.7.4`
 
 ## Resumen
 
@@ -189,8 +189,8 @@ npm test
 git status
 git diff --stat
 git add .
-git commit -m "Release 2.7.3"
-git push origin V2.7.3
+git commit -m "Release 2.7.4"
+git push origin V2.7.4
 
 ## Empaquetado
 
@@ -208,8 +208,8 @@ Al subir un tag con formato `Vx.y.z` o `vx.y.z`, GitHub Actions ejecuta tests, g
 Ejemplo:
 
 ```bash
-git tag V2.7.3
-git push origin V2.7.3
+git tag V2.7.4
+git push origin V2.7.4
 ```
 
 ## Estructura principal del proyecto

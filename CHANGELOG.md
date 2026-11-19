@@ -4,6 +4,11 @@ Todos los cambios relevantes de este proyecto se documentan en este archivo.
 
 ## [Unreleased]
 
+## [2.7.4] - 2026-11-19
+
+### Changed
+- Optimización de la pestaña principal: se muestra únicamente su icono y se reduce su ancho al mínimo necesario para liberar espacio horizontal para el resto de pestañas y el contenido.
+
 ## [2.7.3] - 2026-06-05
 
 ### Added
